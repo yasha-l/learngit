@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git 前端界面</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Git 管理界面</h1>
+            <div class="header-info">
+                <span id="current-branch" class="badge">分支: -</span>
+                <button id="refresh-btn" class="btn btn-secondary">刷新</button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- 左侧导航 -->
+            <aside class="sidebar">
+                <nav>
+                    <ul class="nav-list">
+                        <li class="nav-item active" data-tab="commits">
+                            <span class="icon">📝</span>
+                            提交历史
+                        </li>
+                        <li class="nav-item" data-tab="branches">
+                            <span class="icon">🌿</span>
+                            分支管理
+                        </li>
+                        <li class="nav-item" data-tab="status">
+                            <span class="icon">📊</span>
+                            工作区状态
+                        </li>
+                        <li class="nav-item" data-tab="diff">
+                            <span class="icon">🔍</span>
+                            差异对比
+                        </li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <!-- 主要内容区域 -->
+            <main class="content">
+                <!-- 提交历史 -->
+                <section id="commits-tab" class="tab-content active">
+                    <div class="section-header">
+                        <h2>提交历史</h2>
+                        <div class="controls">
+                            <input type="number" id="commit-limit" value="20" min="1" max="100" placeholder="显示数量">
+                            <button id="load-commits" class="btn btn-primary">加载提交</button>
+                        </div>
+                    </div>
+                    <div id="commits-list" class="commits-container">
+                        <p class="placeholder">点击"加载提交"按钮查看历史记录</p>
+                    </div>
+                </section>
+
+                <!-- 分支管理 -->
+                <section id="branches-tab" class="tab-content">
+                    <div class="section-header">
+                        <h2>分支管理</h2>
+                        <div class="controls">
+                            <input type="text" id="new-branch-name" placeholder="新分支名称">
+                            <button id="create-branch" class="btn btn-primary">创建分支</button>
+                        </div>
+                    </div>
+                    <div id="branches-list" class="branches-container">
+                        <p class="placeholder">加载中...</p>
+                    </div>
+                </section>
+
+                <!-- 工作区状态 -->
+                <section id="status-tab" class="tab-content">
+                    <div class="section-header">
+                        <h2>工作区状态</h2>
+                        <button id="load-status" class="btn btn-primary">刷新状态</button>
+                    </div>
+                    <div id="status-content" class="status-container">
+                        <p class="placeholder">点击"刷新状态"按钮查看工作区状态</p>
+                    </div>
+                </section>
+
+                <!-- 差异对比 -->
+                <section id="diff-tab" class="tab-content">
+                    <div class="section-header">
+                        <h2>差异对比</h2>
+                        <div class="controls">
+                            <input type="text" id="diff-file" placeholder="文件路径（可选）">
+                            <select id="diff-type">
+                                <option value="working">工作区 vs 暂存区</option>
+                                <option value="staged">暂存区 vs HEAD</option>
+                                <option value="head">工作区 vs HEAD</option>
+                            </select>
+                            <button id="load-diff" class="btn btn-primary">查看差异</button>
+                        </div>
+                    </div>
+                    <div id="diff-content" class="diff-container">
+                        <p class="placeholder">选择对比类型并点击"查看差异"按钮</p>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
