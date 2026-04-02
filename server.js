@@ -1,10 +1,10 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
 const cors = require('cors');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -14,9 +14,42 @@ app.use(express.static('.'));
 
 const GIT_DIR = process.env.GIT_REPO_PATH || process.cwd();
 
-async function runGitCommand(command) {
+function validateBranchName(name) {
+    if (!name || typeof name !== 'string') {
+        return { valid: false, message: 'Branch name is required' };
+    }
+    const branchNameRegex = /^[a-zA-Z0-9._/-]+$/;
+    if (!branchNameRegex.test(name)) {
+        return { valid: false, message: 'Invalid branch name format. Only alphanumeric characters, dots, underscores, hyphens, and forward slashes are allowed.' };
+    }
+    if (name.startsWith('-')) {
+        return { valid: false, message: 'Branch name cannot start with a hyphen' };
+    }
+    if (name.includes('..')) {
+        return { valid: false, message: 'Branch name cannot contain double dots' };
+    }
+    if (name.includes('//')) {
+        return { valid: false, message: 'Branch name cannot contain consecutive slashes' };
+    }
+    return { valid: true };
+}
+
+function validateFilePath(file) {
+    if (!file || typeof file !== 'string') {
+        return { valid: false, message: 'File path is required' };
+    }
+    if (file.includes('..')) {
+        return { valid: false, message: 'Invalid file path. Path traversal is not allowed.' };
+    }
+    if (file.startsWith('/')) {
+        return { valid: false, message: 'Invalid file path. Absolute paths are not allowed.' };
+    }
+    return { valid: true };
+}
+
+async function runGitCommandArgs(args) {
     try {
-        const { stdout, stderr } = await execAsync(command, {
+        const { stdout, stderr } = await execFileAsync('git', args, {
             cwd: GIT_DIR,
             maxBuffer: 1024 * 1024 * 10
         });
@@ -27,7 +60,7 @@ async function runGitCommand(command) {
 }
 
 app.get('/api/branch/current', async (req, res) => {
-    const result = await runGitCommand('git branch --show-current');
+    const result = await runGitCommandArgs(['branch', '--show-current']);
     if (result.success) {
         res.json({ success: true, branch: result.output.trim() });
     } else {
@@ -36,7 +69,7 @@ app.get('/api/branch/current', async (req, res) => {
 });
 
 app.get('/api/branches', async (req, res) => {
-    const result = await runGitCommand('git branch -a');
+    const result = await runGitCommandArgs(['branch', '-a']);
     if (result.success) {
         const branches = result.output
             .split('\n')
@@ -54,10 +87,11 @@ app.get('/api/branches', async (req, res) => {
 
 app.post('/api/branch/create', async (req, res) => {
     const { name } = req.body;
-    if (!name) {
-        return res.json({ success: false, message: 'Branch name is required' });
+    const validation = validateBranchName(name);
+    if (!validation.valid) {
+        return res.json({ success: false, message: validation.message });
     }
-    const result = await runGitCommand(`git branch ${name}`);
+    const result = await runGitCommandArgs(['branch', name]);
     if (result.success) {
         res.json({ success: true, message: 'Branch created successfully' });
     } else {
@@ -67,10 +101,11 @@ app.post('/api/branch/create', async (req, res) => {
 
 app.post('/api/branch/checkout', async (req, res) => {
     const { name } = req.body;
-    if (!name) {
-        return res.json({ success: false, message: 'Branch name is required' });
+    const validation = validateBranchName(name);
+    if (!validation.valid) {
+        return res.json({ success: false, message: validation.message });
     }
-    const result = await runGitCommand(`git checkout ${name}`);
+    const result = await runGitCommandArgs(['checkout', name]);
     if (result.success) {
         res.json({ success: true, message: 'Branch checked out successfully' });
     } else {
@@ -80,14 +115,15 @@ app.post('/api/branch/checkout', async (req, res) => {
 
 app.post('/api/branch/delete', async (req, res) => {
     const { name } = req.body;
-    if (!name) {
-        return res.json({ success: false, message: 'Branch name is required' });
+    const validation = validateBranchName(name);
+    if (!validation.valid) {
+        return res.json({ success: false, message: validation.message });
     }
-    const result = await runGitCommand(`git branch -d ${name}`);
+    const result = await runGitCommandArgs(['branch', '-d', name]);
     if (result.success) {
         res.json({ success: true, message: 'Branch deleted successfully' });
     } else {
-        const forceResult = await runGitCommand(`git branch -D ${name}`);
+        const forceResult = await runGitCommandArgs(['branch', '-D', name]);
         if (forceResult.success) {
             res.json({ success: true, message: 'Branch force deleted successfully' });
         } else {
@@ -97,10 +133,16 @@ app.post('/api/branch/delete', async (req, res) => {
 });
 
 app.get('/api/commits', async (req, res) => {
-    const limit = req.query.limit || 20;
-    const result = await runGitCommand(
-        `git log -${limit} --pretty=format:"%H|%an|%ae|%ad|%s" --date=iso`
-    );
+    const limit = parseInt(req.query.limit) || 20;
+    if (limit < 1 || limit > 1000) {
+        return res.json({ success: false, message: 'Invalid limit parameter' });
+    }
+    const result = await runGitCommandArgs([
+        'log',
+        `-${limit}`,
+        '--pretty=format:%H|%an|%ae|%ad|%s',
+        '--date=iso'
+    ]);
     
     if (result.success && result.output) {
         const commits = result.output
@@ -123,7 +165,7 @@ app.get('/api/commits', async (req, res) => {
 });
 
 app.get('/api/status', async (req, res) => {
-    const result = await runGitCommand('git status --porcelain');
+    const result = await runGitCommandArgs(['status', '--porcelain']);
     
     if (result.success) {
         const status = {
@@ -160,24 +202,31 @@ app.get('/api/status', async (req, res) => {
 
 app.get('/api/diff', async (req, res) => {
     const { type, file } = req.query;
-    let command = 'git diff';
-
-    switch (type) {
-        case 'staged':
-            command = 'git diff --staged';
-            break;
-        case 'head':
-            command = 'git diff HEAD';
-            break;
-        default:
-            command = 'git diff';
+    
+    const validTypes = ['staged', 'head', ''];
+    if (type && !validTypes.includes(type)) {
+        return res.json({ success: false, message: 'Invalid diff type' });
     }
-
+    
     if (file) {
-        command += ` -- ${file}`;
+        const fileValidation = validateFilePath(file);
+        if (!fileValidation.valid) {
+            return res.json({ success: false, message: fileValidation.message });
+        }
+    }
+    
+    const args = ['diff'];
+    if (type === 'staged') {
+        args.push('--staged');
+    } else if (type === 'head') {
+        args.push('HEAD');
+    }
+    
+    if (file) {
+        args.push('--', file);
     }
 
-    const result = await runGitCommand(command);
+    const result = await runGitCommandArgs(args);
     
     if (result.success) {
         res.json({ success: true, diff: result.output });
@@ -188,10 +237,25 @@ app.get('/api/diff', async (req, res) => {
 
 app.get('/api/log/:file', async (req, res) => {
     const { file } = req.params;
-    const limit = req.query.limit || 10;
-    const result = await runGitCommand(
-        `git log -${limit} --pretty=format:"%H|%an|%ad|%s" --date=short -- ${file}`
-    );
+    const limit = parseInt(req.query.limit) || 10;
+    
+    if (limit < 1 || limit > 1000) {
+        return res.json({ success: false, message: 'Invalid limit parameter' });
+    }
+    
+    const fileValidation = validateFilePath(file);
+    if (!fileValidation.valid) {
+        return res.json({ success: false, message: fileValidation.message });
+    }
+    
+    const result = await runGitCommandArgs([
+        'log',
+        `-${limit}`,
+        '--pretty=format:%H|%an|%ad|%s',
+        '--date=short',
+        '--',
+        file
+    ]);
     
     if (result.success && result.output) {
         const commits = result.output
