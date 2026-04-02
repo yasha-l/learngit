@@ -98,23 +98,25 @@ class GitUI {
             const data = await response.json();
 
             if (data.success && data.branches.length > 0) {
-                container.innerHTML = data.branches.map(branch => `
+                container.innerHTML = data.branches.map(branch => {
+                    const escapedName = this.escapeHtml(branch.name);
+                    return `
                     <div class="branch-item ${branch.current ? 'current' : ''}">
                         <div class="branch-name">
-                            ${branch.current ? '✓' : '🌿'} ${branch.name}
+                            ${branch.current ? '✓' : '🌿'} ${escapedName}
                         </div>
                         <div class="branch-actions">
                             ${!branch.current ? `
-                                <button class="btn btn-secondary" onclick="gitUI.checkoutBranch('${branch.name}')">
+                                <button class="btn btn-secondary" onclick="gitUI.checkoutBranch('${escapedName}')">
                                     切换
                                 </button>
-                                <button class="btn btn-danger" onclick="gitUI.deleteBranch('${branch.name}')">
+                                <button class="btn btn-danger" onclick="gitUI.deleteBranch('${escapedName}')">
                                     删除
                                 </button>
                             ` : ''}
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             } else {
                 container.innerHTML = '<p class="placeholder">暂无分支</p>';
             }
